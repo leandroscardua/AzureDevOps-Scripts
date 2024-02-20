@@ -1,6 +1,5 @@
-# Add your PAT below
 $pat= ""
-$bytes = [System.Text.Encoding]::UTF8.GetBytes(":$($token)")
+$bytes = [System.Text.Encoding]::UTF8.GetBytes(":$($pat)")
 $base64bytes = [System.Convert]::ToBase64String($bytes)
 $headers = @{ "Authorization" = "Basic $base64bytes"}
 
