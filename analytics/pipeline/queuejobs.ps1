@@ -10,3 +10,5 @@ $poolid = ""
 $uri = "https://dev.azure.com/$organization/_apis/distributedtask/pools/$poolid/jobrequests?agentId=140&completeRequestCount=25"
 
 $result = Invoke-RestMethod -Uri $uri -Headers $headers -Method Get -ContentType "application/json"
+
+$result
