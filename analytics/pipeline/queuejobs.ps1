@@ -1,3 +1,4 @@
+# AgentPools read for the PAT permission
 $pat= ""
 $bytes = [System.Text.Encoding]::UTF8.GetBytes(":$($pat)")
 $base64bytes = [System.Convert]::ToBase64String($bytes)
