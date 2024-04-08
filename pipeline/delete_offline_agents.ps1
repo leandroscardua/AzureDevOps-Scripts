@@ -1,14 +1,60 @@
-# https://stackoverflow.com/questions/74134508/how-do-i-programmatically-delete-offline-agents-in-my-agent-pools-in-azuredevops
-$org = ""
-$poolid = ""
-$headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-$headers.Add("Authorization", "Basic {base 64 encode PAT}XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
-$agents = Invoke-RestMethod 'https://dev.azure.com/$org/_apis/distributedtask/pools/$poolid/agents' -Method 'GET' -Headers $headers
+#https://github.com/devopsdina/remove-offline-agents/blob/master/Remove-OfflineAgents.ps1
+<#
+.SYNOPSIS
+Removes offline build agents in Azure DevOps fromthe Organization and Agent pool specified
 
-$agents.value |
+.PARAMETER PAT
+Required. The personal access token for Azure DevOps
 
-    Where-Object { $_.status -eq 'offline' } |
+.PARAMETER OrganizationName
+Required. The Azure DevOps organization name
 
-    ForEach-Object {
-        Invoke-RestMethod https://dev.azure.com/$org/_apis/distributedtask/pools/$poolid/agents/$($_.id)?api-version=6.0 -Method 'Delete' -Headers $headers
+.PARAMETER AgentPoolName
+Required. The Azure DevOps agent pool name
+
+.EXAMPLE
+.\Remove-OfflineAgents.ps1 -PAT 'sdfkjsdf892349mfidf983294jkldf832894234sdsdgdfg' -OrganizationName 'My-Super-Cool-DevOps-Org' -AgentPoolName 'My-Super-Sweet-Agent-Pool'
+#>
+param(
+  [Parameter(Mandatory = $true)]
+  [ValidateNotNullOrEmpty()]
+  [string]$PAT,
+
+  [Parameter(Mandatory = $true)]
+  [string]$OrganizationName,
+
+  [Parameter(Mandatory = $true)]
+  [string]$AgentPoolName,
+
+  [Parameter(Mandatory = $false)]
+  [string]$ApiVersion = '5.1'
+)
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$EncodedPAT = [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes(":$PAT"))
+$PoolsUrl = "https://dev.azure.com/$($OrganizationName)/_apis/distributedtask/pools?api-version=$($ApiVersion)"
+try {
+  $Pools = (Invoke-RestMethod -Uri $PoolsUrl -Method 'Get' -Headers @{Authorization = "Basic $EncodedPAT"}).value
+} catch {
+  throw $_.Exception
+}
+
+If ($Pools) {
+  $PoolId = ($Pools | Where-Object { $_.Name -eq $AgentPoolName }).id
+  $AgentsUrl = "https://dev.azure.com/$($OrganizationName)/_apis/distributedtask/pools/$($PoolId)/agents?api-version=$($ApiVersion)"
+  $Agents = (Invoke-RestMethod -Uri $AgentsUrl -Method 'Get' -Headers @{Authorization = "Basic $EncodedPAT"}).value
+  if ($Agents) {
+    $AgentNames = ($Agents | Where-Object { $_.status -eq 'Offline'}).Name
+    $OfflineAgents = ($Agents | Where-Object { $_.status -eq 'Offline'}).id
+    foreach ($OfflineAgent in $OfflineAgents) {
+      foreach ($AgentName in $AgentNames) {
+        Write-Output "Removing: $($AgentName) From Pool: $($AgentPoolName) in Organization: $($OrganizationName)"
+        $OfflineAgentsUrl = "https://dev.azure.com/$($OrganizationName)/_apis/distributedtask/pools/$($PoolId)/agents/$($OfflineAgent)?api-version=$($ApiVersion)"
+        Invoke-RestMethod -Uri $OfflineAgentsUrl -Method 'Delete' -Headers @{Authorization = "Basic $EncodedPAT"}
+      }
     }
+  } else {
+    Write-Output "No Agents found in $($AgentPoolName) for Organization $($OrganizationName)"
+  }
+} else {
+  Write-Output "No Pools named $($AgentPoolName) found in Organization $($OrganizationName)"
+}
